@@ -47,6 +47,7 @@ def fast_rcnn_inference(
     boxes: List[torch.Tensor],
     scores: List[torch.Tensor],
     image_shapes: List[Tuple[int, int]],
+    box_features: List[torch.Tensor],
     score_thresh: float,
     nms_thresh: float,
     topk_per_image: int,
@@ -78,8 +79,8 @@ def fast_rcnn_inference(
     """
     result_per_image = [
         fast_rcnn_inference_single_image(
-            boxes_per_image, scores_per_image, image_shape, score_thresh, nms_thresh, topk_per_image
-        )
+            boxes_per_image, scores_per_image, image_shape, box_features, score_thresh, nms_thresh, topk_per_image
+        ) #METTERE LE BOX FEATURES DENTRO ZIP PER POTER FUNZIONARE CON PIU' IMMAGINI
         for scores_per_image, boxes_per_image, image_shape in zip(scores, boxes, image_shapes)
     ]
     return [x[0] for x in result_per_image], [x[1] for x in result_per_image]
@@ -119,6 +120,7 @@ def fast_rcnn_inference_single_image(
     boxes,
     scores,
     image_shape: Tuple[int, int],
+    box_features,
     score_thresh: float,
     nms_thresh: float,
     topk_per_image: int,
@@ -162,12 +164,13 @@ def fast_rcnn_inference_single_image(
     keep = batched_nms(boxes, scores, filter_inds[:, 1], nms_thresh)
     if topk_per_image >= 0:
         keep = keep[:topk_per_image]
-    boxes, scores, filter_inds = boxes[keep], scores[keep], filter_inds[keep]
+    boxes, scores, filter_inds, box_features = boxes[keep], scores[keep], filter_inds[keep], box_features[keep]
 
     result = Instances(image_shape)
     result.pred_boxes = Boxes(boxes)
     result.scores = scores
     result.pred_classes = filter_inds[:, 1]
+    result.box_features = box_features
     return result, filter_inds[:, 0]
 
 
