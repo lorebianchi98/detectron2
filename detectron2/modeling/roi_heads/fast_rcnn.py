@@ -142,15 +142,25 @@ def fast_rcnn_inference_single_image(
         scores = scores[valid_mask]
 
     scores = scores[:, :-1]
+    
+    
     num_bbox_reg_classes = boxes.shape[1] // 4
     # Convert to Boxes to use the `clip` function ...
     boxes = Boxes(boxes.reshape(-1, 4))
     boxes.clip(image_shape)
     boxes = boxes.tensor.view(-1, num_bbox_reg_classes, 4)  # R x C x 4
 
+    # save the scores for later
+    scores_all = scores
+    
     # 1. Filter results based on detection scores. It can make NMS more efficient
     #    by filtering out low-confidence detections.
-    filter_mask = scores > score_thresh  # R x K
+    # filter_mask = scores > score_thresh  # R x K
+    # Create the mask
+    
+    # CHANGED FROM DEFAULT
+    max_indices = torch.argmax(scores, dim=1)
+    filter_mask = torch.arange(scores.shape[1], device=scores.device) == max_indices.view(-1, 1)
     # R' x 2. First column contains indices of the R predictions;
     # Second column contains indices of classes.
     filter_inds = filter_mask.nonzero()
@@ -159,16 +169,22 @@ def fast_rcnn_inference_single_image(
     else:
         boxes = boxes[filter_mask]
     scores = scores[filter_mask]
-
+    
+     # filter scores_all
+    scores_all = scores_all[filter_inds[:,0]]
     # 2. Apply NMS for each class independently.
     keep = batched_nms(boxes, scores, filter_inds[:, 1], nms_thresh)
     if topk_per_image >= 0:
         keep = keep[:topk_per_image]
     boxes, scores, filter_inds, box_features = boxes[keep], scores[keep], filter_inds[keep], box_features[keep]
 
+   # index scores_all
+    scores_all = scores_all[keep]
+    
     result = Instances(image_shape)
     result.pred_boxes = Boxes(boxes)
     result.scores = scores
+    result.total_scores = scores_all
     result.pred_classes = filter_inds[:, 1]
     result.box_features = box_features
     return result, filter_inds[:, 0]
